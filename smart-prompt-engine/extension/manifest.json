@@ -1,0 +1,23 @@
+{
+    "manifest_version": 3,
+    "name": "Smart Prompt Engine",
+    "version": "1.0",
+    "description": "Improves prompts before sending to AI",
+    "permissions": [
+        "activeTab",
+        "storage"
+    ],
+    "action": {
+        "default_popup": "popup.html"
+    },
+    "content_scripts": [
+        {
+            "matches": [
+                "*://*.openai.com/*"
+            ],
+            "js": [
+                "content.js"
+            ]
+        }
+    ]
+}
