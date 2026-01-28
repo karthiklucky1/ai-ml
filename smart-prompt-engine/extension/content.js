@@ -77,3 +77,25 @@ function showSuggestions(questions) {
     }
     div.innerHTML = questions.map(q => `<p>${q}</p>`).join("");
 }
+
+const textarea = document.getElementById("prompt-textarea");
+
+textarea.addEventListener("input", async () => {
+    const prompt = textarea.value;
+    const largeText = document.getElementById("large-text-input").value;
+
+    if (largeText && largeText.length > 200) { // threshold
+        const response = await fetch("http://127.0.0.1:8000/optimize_context", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt: prompt, text: largeText })
+        });
+        const data = await response.json();
+
+        const hintBox = document.getElementById("hint-box");
+        hintBox.innerHTML = `
+            💡 You can reduce tokens by ${data.tokens_saved}<br>
+            Suggested context:<br>${data.optimized_context}
+        `;
+    }
+});
