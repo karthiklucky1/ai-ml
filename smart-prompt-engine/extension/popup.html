@@ -2,15 +2,122 @@
 <html>
 
 <head>
+    <meta charset="utf-8" />
     <title>Smart Prompt Engine</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            width: 320px;
+            padding: 12px;
+        }
+
+        textarea {
+            width: 100%;
+            height: 90px;
+            resize: vertical;
+            padding: 8px;
+        }
+
+        .row {
+            margin-top: 10px;
+        }
+
+        .score-wrap {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .bar {
+            width: 100%;
+            height: 10px;
+            background: #eee;
+            border-radius: 999px;
+            overflow: hidden;
+        }
+
+        .bar>div {
+            height: 10px;
+            width: 0%;
+            background: #111;
+        }
+
+        .pill {
+            display: inline-block;
+            padding: 6px 8px;
+            border-radius: 999px;
+            background: #f3f3f3;
+            margin: 4px 4px 0 0;
+            font-size: 12px;
+        }
+
+        .muted {
+            color: #666;
+            font-size: 12px;
+        }
+
+        button {
+            width: 100%;
+            padding: 10px;
+            margin-top: 10px;
+            cursor: pointer;
+        }
+    </style>
 </head>
 
 <body>
-    <h3>Prompt Tools</h3>
-    <textarea id="popupPrompt" placeholder="Type your prompt" rows="5" cols="50"></textarea><br>
-    <button id="scoreBtn">Score</button>
-    <button id="optimizeBtn">Optimize</button>
-    <div id="result"></div>
+    <h3 style="margin:0;">Smart Prompt Engine</h3>
+    <div class="muted">Live score + suggestions while you type</div>
+
+    <div class="row">
+        <textarea id="promptInput" placeholder="Type your prompt here..."></textarea>
+    </div>
+
+    <div class="row score-wrap">
+        <div style="min-width:70px;"><b>Score:</b> <span id="scoreValue">--</span></div>
+        <div class="bar">
+            <div id="scoreBar"></div>
+        </div>
+    </div>
+    <div class="row" style="margin-top:10px;">
+        <b>Token Saver</b>
+        <div class="muted" id="compressStatus" style="margin-top:6px;">Click Compress to reduce long logs safely.</div>
+
+        <button id="compressBtn" style="margin-top:8px; width:100%; padding:8px;">
+            Compress (Token Saver)
+        </button>
+
+        <div id="compressPreview" class="muted"
+            style="margin-top:8px; white-space:pre-wrap; border:1px solid #ddd; padding:8px; border-radius:8px; max-height:160px; overflow:auto;">
+            (No compressed preview yet)
+        </div>
+
+        <div style="display:flex; gap:8px; margin-top:8px;">
+            <button id="useCompressedBtn" disabled style="flex:1; padding:8px;">Use Compressed</button>
+            <button id="useFullBtn" disabled style="flex:1; padding:8px;">Use Full</button>
+        </div>
+    </div>
+
+    <div class="muted" id="intentText" style="margin-top:6px;">Intent: --</div>
+
+    <div class="row">
+        <b>LLM Rewrite Suggestions</b>
+        <div id="llmRewriteCards" style="margin-top:6px;"></div>
+    </div>
+
+    <div class="row">
+        <b>LLM Missing Info</b>
+        <div id="llmMissing" class="muted" style="margin-top:6px;">--</div>
+    </div>
+
+
+    <button id="optimizeBtn" disabled>Optimize (next step)</button>
+    <div class="row">
+        <b>Optimized Prompt</b>
+        <pre id="optimizedOutput" class="muted" style="white-space: pre-wrap; margin-top:6px;">(Click Optimize)</pre>
+    </div>
+
+
     <script src="popup.js"></script>
 </body>
 
