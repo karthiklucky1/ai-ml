@@ -25,16 +25,14 @@ from backend.storage.feedback import append_feedback, summary as feedback_summar
 from backend.compress.text import compress_text
 
 # -----------------------------
-# Lazily initialized shared objects
+# Initialize shared objects
 # -----------------------------
 
-rep: PromptRepresentation | None = None
-local_scorer: LocalScorer | None = None
-intent_detector: IntentDetector | None = None
-gap_reasoner: GapReasoner | None = None
-optimizer: PromptOptimizer | None = None
-confidence_scorer: PromptConfidenceScorer | None = None
-uncertainty_estimator: PromptUncertaintyEstimator | None = None
+rep = PromptRepresentation()
+local_scorer = LocalScorer(rep)
+intent_detector = IntentDetector()
+gap_reasoner = GapReasoner()  # OpenAI-based reasoner
+optimizer = PromptOptimizer(intent_detector, gap_reasoner)
 
 # LLM client (used only for rewrite suggestions)
 # Make sure you have OPENAI_API_KEY in your environment
@@ -56,6 +54,7 @@ def _rewrite_cache_key(prompt: str, model: str, user_id: str) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
+# Reference prompts for confidence
 good_prompts = [
     "Explain how a neural network works step by step",
     "Compare CNN and RNN with examples",
@@ -64,37 +63,9 @@ good_prompts = [
     "Fix this React useEffect infinite loop"
 ]
 
-
-def get_rep() -> PromptRepresentation:
-    global rep
-    if rep is None:
-        rep = PromptRepresentation()
-    return rep
-
-
-def get_local_scorer() -> LocalScorer:
-    global local_scorer
-    if local_scorer is None:
-        local_scorer = LocalScorer(get_rep())
-    return local_scorer
-
-
-def get_optimizer_and_confidence() -> tuple[PromptOptimizer, PromptConfidenceScorer]:
-    global intent_detector, gap_reasoner, optimizer, confidence_scorer, uncertainty_estimator
-
-    if intent_detector is None:
-        intent_detector = IntentDetector(get_rep())
-    if gap_reasoner is None:
-        gap_reasoner = GapReasoner()
-    if optimizer is None:
-        optimizer = PromptOptimizer(intent_detector, gap_reasoner)
-
-    if confidence_scorer is None:
-        good_vectors = [get_rep().encode(p) for p in good_prompts]
-        confidence_scorer = PromptConfidenceScorer(good_vectors)
-        uncertainty_estimator = PromptUncertaintyEstimator(good_vectors)
-
-    return optimizer, confidence_scorer
+good_vectors = [rep.encode(p) for p in good_prompts]
+confidence_scorer = PromptConfidenceScorer(good_vectors)
+uncertainty_estimator = PromptUncertaintyEstimator(good_vectors)
 
 # -----------------------------
 # FastAPI app
@@ -172,8 +143,7 @@ def score_endpoint(data: PromptData):
     - missing dimensions
     - live suggestions
     """
-    scorer = get_local_scorer()
-    return scorer.score(data.prompt)
+    return local_scorer.score(data.prompt)
 
 
 @app.post("/optimize")
@@ -181,11 +151,10 @@ def optimize_endpoint(data: OptimizeData):
     """
     Returns optimized prompt with missing info detected by LLM
     """
-    rep_obj = get_rep()
-    optimizer_obj, confidence_obj = get_optimizer_and_confidence()
-    user_vec = rep_obj.encode(data.prompt)
-    confidence = confidence_obj.score(user_vec)
-    result = optimizer_obj.optimize(data.prompt, confidence)
+    user_vec = rep.encode(data.prompt)
+    confidence = confidence_scorer.score(user_vec)
+
+    result = optimizer.optimize(data.prompt, confidence)
     return result
 
 
