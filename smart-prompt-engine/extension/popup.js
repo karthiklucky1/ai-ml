@@ -1,6 +1,6 @@
 const API_BASES = [
     "http://127.0.0.1:8000",
-    "https://smart-prompt-engine.onrender.com",
+    "https://smart-prompt-engine-edfa.up.railway.app",
 ];
 
 const promptInput = document.getElementById("promptInput");
