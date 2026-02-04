@@ -1,10 +1,10 @@
-from sentence_transformers import SentenceTransformer
 import numpy as np
+from backend.scorer.representation import PromptRepresentation
 
 
 class IntentDetector:
-    def __init__(self):
-        self.model = SentenceTransformer("all-MiniLM-L6-v2")
+    def __init__(self, rep: PromptRepresentation | None = None):
+        self.rep = rep or PromptRepresentation()
 
         self.intents = {
             "instruction": "how to make how to do steps procedure",
@@ -14,13 +14,19 @@ class IntentDetector:
             "estimation": "how much how many calculate estimate"
         }
 
+        self.intent_vectors = None
+
+    def _ensure_intent_vectors(self):
+        if self.intent_vectors is not None:
+            return
         self.intent_vectors = {
-            k: self.model.encode(v)
+            k: self.rep.encode(v)
             for k, v in self.intents.items()
         }
 
     def detect(self, prompt: str) -> str:
-        prompt_vec = self.model.encode(prompt)
+        self._ensure_intent_vectors()
+        prompt_vec = self.rep.encode(prompt)
 
         best_intent = "explanation"
         best_score = -1

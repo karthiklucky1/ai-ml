@@ -1,7 +1,17 @@
-from sentence_transformers import SentenceTransformer
 import numpy as np
 from typing import List, Dict
 from collections import Counter
+
+_EMBEDDERS: Dict[str, object] = {}
+
+
+def get_embedder(model_name: str = "all-MiniLM-L6-v2"):
+    model = _EMBEDDERS.get(model_name)
+    if model is None:
+        from sentence_transformers import SentenceTransformer
+        model = SentenceTransformer(model_name)
+        _EMBEDDERS[model_name] = model
+    return model
 
 
 class PromptRepresentation:
@@ -10,13 +20,14 @@ class PromptRepresentation:
         Representation engine.
         Converts text into semantic vectors.
         """
-        self.model = SentenceTransformer(model_name)
+        self.model_name = model_name
 
     def encode(self, text: str) -> np.ndarray:
         """
         Convert prompt text into an embedding vector.
         """
-        embedding = self.model.encode(text, normalize_embeddings=True)
+        model = get_embedder(self.model_name)
+        embedding = model.encode(text, normalize_embeddings=True)
         return embedding
 
 
