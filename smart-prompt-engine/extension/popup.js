@@ -1,4 +1,7 @@
-const API_BASE = "http://127.0.0.1:8000";
+const API_BASES = [
+    "http://127.0.0.1:8000",
+    "https://smart-prompt-engine.onrender.com",
+];
 
 const promptInput = document.getElementById("promptInput");
 const scoreValue = document.getElementById("scoreValue");
@@ -25,6 +28,28 @@ let llmCache = new Map(); // prompt -> result
 
 let lastCompression = null;
 let lastFullText = "";
+
+async function postWithFallback(path, payload) {
+    let lastError = null;
+    for (const apiBase of API_BASES) {
+        try {
+            const res = await fetch(`${apiBase}${path}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload || {})
+            });
+            if (!res.ok) {
+                const text = await res.text();
+                lastError = `${res.status} ${text}`;
+                continue;
+            }
+            return await res.json();
+        } catch (e) {
+            lastError = String(e);
+        }
+    }
+    throw new Error(`All backends failed: ${lastError || "unknown error"}`);
+}
 
 function setLoadingUI() {
     scoreValue.textContent = "...";
@@ -93,24 +118,15 @@ async function callScoreAPI(prompt) {
     inFlightScore = true;
 
     try {
-        const res = await fetch(`${API_BASE}/score`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ prompt })
-        });
-
-        if (!res.ok) {
-            const text = await res.text();
-            throw new Error(`Score API failed: ${res.status} ${text}`);
-        }
-
-        const result = await res.json();
+        const result = await postWithFallback("/score", { prompt });
         renderScore(result);
     } catch (err) {
         scoreValue.textContent = "ERR";
         intentText.textContent = "Intent: --";
-        suggestionsDiv.textContent =
-            "Could not reach backend. Make sure FastAPI is running on http://127.0.0.1:8000";
+        if (llmMissingDiv) {
+            llmMissingDiv.textContent =
+                "Could not reach backend. Tried local (127.0.0.1:8000) and Render.";
+        }
         console.error(err);
         optimizeBtn.disabled = true;
     } finally {
@@ -139,18 +155,7 @@ async function callOptimizeAPI(prompt) {
     optimizedOutput.textContent = "Optimizing...";
 
     try {
-        const res = await fetch(`${API_BASE}/optimize`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ prompt })
-        });
-
-        if (!res.ok) {
-            const text = await res.text();
-            throw new Error(`Optimize API failed: ${res.status} ${text}`);
-        }
-
-        const result = await res.json();
+        const result = await postWithFallback("/optimize", { prompt });
 
         // Your backend returns either:
         // { optimized_prompt: "..."} OR { optimized_prompt: "...", needs_improvement: true, intent: "..."}
@@ -234,13 +239,7 @@ async function callRewriteSuggestions(prompt) {
     // cache
     if (llmCache.has(prompt)) return llmCache.get(prompt);
 
-    const res = await fetch(`${API_BASE}/rewrite_suggestions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt })
-    });
-
-    const data = await res.json();
+    const data = await postWithFallback("/rewrite_suggestions", { prompt });
     llmCache.set(prompt, data);
     return data;
 }
@@ -283,17 +282,13 @@ function renderLLMRewrite(data) {
             promptInput.value = text;
             scheduleScore(text);
 
-            fetch(`${API_BASE}/feedback`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
+            postWithFallback("/feedback", {
                     type: "rewrite_click",
                     prompt: text,
                     intent: data.intent || "other",
                     card_index: idx,
                     card_text: text
                 })
-            })
                 .then(() => { })
                 .catch(e => console.warn("feedback failed", e));
         };
@@ -309,10 +304,5 @@ function renderLLMRewrite(data) {
 
 
 async function callCompress(text) {
-    const res = await fetch(`${API_BASE}/compress`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text })
-    });
-    return await res.json();
+    return await postWithFallback("/compress", { text });
 }

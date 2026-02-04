@@ -1,5 +1,8 @@
 // extension/background.js
-const API_BASE = "http://127.0.0.1:8000";
+const API_BASES = [
+    "http://127.0.0.1:8000",
+    "https://smart-prompt-engine.onrender.com",
+];
 const USER_KEY = "spe_user_id";
 
 async function getUserId() {
@@ -21,23 +24,30 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     (async () => {
         try {
             const userId = await getUserId();
+            let lastError = null;
 
-            const res = await fetch(`${API_BASE}${msg.path}`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "X-SPE-User": userId,
-                },
-                body: JSON.stringify(msg.body || {}),
-            });
+            for (const apiBase of API_BASES) {
+                try {
+                    const res = await fetch(`${apiBase}${msg.path}`, {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "X-SPE-User": userId,
+                        },
+                        body: JSON.stringify(msg.body || {}),
+                    });
 
-            const data = await res.json().catch(() => ({}));
-            sendResponse({
-                ok: res.ok,
-                status: res.status,
-                data,
-                error: res.ok ? null : (data?.error || `HTTP ${res.status}`),
-            });
+                    const data = await res.json().catch(() => ({}));
+                    if (res.ok) {
+                        sendResponse({ ok: true, status: res.status, data, error: null });
+                        return;
+                    }
+                    lastError = data?.error || `HTTP ${res.status}`;
+                } catch (e) {
+                    lastError = String(e);
+                }
+            }
+            sendResponse({ ok: false, error: lastError || "All backends failed", data: null });
         } catch (e) {
             sendResponse({ ok: false, error: String(e), data: null });
         }
