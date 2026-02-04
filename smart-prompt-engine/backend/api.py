@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Request
 import hashlib
 from backend.utils.cache import TTLCache, SimpleRateLimiter, normalize_prompt
+from backend.cache_metrics import CacheStats, reset_stats
 
 
 # Internal modules
@@ -15,7 +16,7 @@ from backend.optimizer.prompt_builder import PromptOptimizer
 from backend.scorer.gap_reasoner import GapReasoner
 from backend.scorer.local_score import LocalScorer
 from backend.llm.openai_client import OpenAITextClient, LLMError
-from backend.rewrite.suggestions import get_rewrite_suggestions
+from backend.rewrite.suggestions import get_rewrite_suggestions, SYSTEM_VERSION as REWRITE_SYSTEM_VERSION
 from backend.compress.logs import compress_logs, looks_like_log, detect_log_reason
 from backend.compress.code import compress_code, looks_like_code, detect_code_reason
 from backend.compress.data import compress_json, looks_like_json, detect_json_reason
@@ -41,13 +42,13 @@ except Exception:
     llm_client = None
 
 rewrite_cache = TTLCache(ttl_seconds=600, max_items=500)       # 10 minutes
+rewrite_cache_stats = CacheStats(name="rewrite_cache")
 rewrite_limiter = SimpleRateLimiter(
     max_requests=20, window_seconds=60)  # 20/min per IP
-REWRITE_SYSTEM_VERSION = "v3.2"
 
 
-def _rewrite_cache_key(prompt: str, model: str) -> str:
-    raw = f"{REWRITE_SYSTEM_VERSION}|{model}|{prompt.strip()}".encode(
+def _rewrite_cache_key(prompt: str, model: str, user_id: str) -> str:
+    raw = f"{REWRITE_SYSTEM_VERSION}|{model}|{user_id.strip()}|{prompt.strip()}".encode(
         "utf-8", errors="ignore"
     )
     return hashlib.sha256(raw).hexdigest()
@@ -179,12 +180,16 @@ def rewrite_suggestions_endpoint(data: RewriteData, request: Request):
         return {"error": "empty_prompt"}
 
     model_name = getattr(llm_client, "model", "unknown")
-    key = _rewrite_cache_key(prompt, model_name)
+    user_id = request.headers.get("X-SPE-User", "").strip() or "anon"
+    key = _rewrite_cache_key(prompt, model_name, user_id)
     cached = rewrite_cache.get(key)
     if cached is not None:
+        rewrite_cache_stats.hits += 1
         out = dict(cached)
-        out["meta"] = {"cache": "hit", "system_version": REWRITE_SYSTEM_VERSION}
+        out["meta"] = {"cache": "hit",
+                       "system_version": REWRITE_SYSTEM_VERSION}
         return out
+    rewrite_cache_stats.misses += 1
 
     # Call LLM
     try:
@@ -202,7 +207,9 @@ def rewrite_suggestions_endpoint(data: RewriteData, request: Request):
 
         # store in cache
         rewrite_cache.set(key, result)
-        result["meta"] = {"cache": "miss", "system_version": REWRITE_SYSTEM_VERSION}
+        rewrite_cache_stats.sets += 1
+        result["meta"] = {"cache": "miss",
+                          "system_version": REWRITE_SYSTEM_VERSION}
         return result
 
     except LLMError as e:
@@ -276,3 +283,21 @@ def feedback_endpoint(data: FeedbackData):
 @app.get("/feedback/summary")
 def feedback_summary_endpoint():
     return feedback_summary()
+
+
+@app.get("/cache_metrics")
+def cache_metrics():
+    return {
+        "rewrite_cache": {
+            **rewrite_cache_stats.to_dict(),
+            "maxsize": getattr(rewrite_cache, "maxsize", getattr(rewrite_cache, "max_items", None)),
+            "ttl": getattr(rewrite_cache, "ttl", None),
+            "currsize": len(getattr(rewrite_cache, "store", {})),
+        }
+    }
+
+
+@app.post("/cache_metrics/reset")
+def cache_metrics_reset():
+    reset_stats(rewrite_cache_stats)
+    return {"ok": True}

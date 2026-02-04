@@ -1,255 +1,9 @@
-// // 1️⃣ Find input box
-// const inputBox = document.querySelector("textarea");
-
-// // 2️⃣ Helper functions
-// async function fetchScore(prompt) {
-//     const res = await fetch("http://127.0.0.1:8000/score", {
-//         method: "POST",
-//         headers: { "Content-Type": "application/json" },
-//         body: JSON.stringify({ prompt })
-//     });
-//     return await res.json();
-// }
-
-// async function fetchSuggestions(prompt) {
-//     const res = await fetch("http://127.0.0.1:8000/suggest", {
-//         method: "POST",
-//         headers: { "Content-Type": "application/json" },
-//         body: JSON.stringify({ prompt })
-//     });
-//     return await res.json();
-// }
-
-// async function fetchOptimized(prompt, answers = {}) {
-//     const res = await fetch("http://127.0.0.1:8000/optimize", {
-//         method: "POST",
-//         headers: { "Content-Type": "application/json" },
-//         body: JSON.stringify({ prompt, answers })
-//     });
-//     return await res.json();
-// }
-
-// // 3️⃣ Display suggestions & score
-// inputBox.addEventListener("input", async () => {
-//     const prompt = inputBox.value;
-
-//     const scoreData = await fetchScore(prompt);
-//     showScore(scoreData);
-
-//     const suggestions = await fetchSuggestions(prompt);
-//     showSuggestions(suggestions.questions);
-// });
-
-// // 4️⃣ Optimize button
-// let optimizeBtn = document.createElement("button");
-// optimizeBtn.innerText = "Optimize Prompt";
-// inputBox.parentNode.appendChild(optimizeBtn);
-
-// optimizeBtn.addEventListener("click", async () => {
-//     const answers = {
-//         task: "classification",
-//         output: "Python code",
-//         level: "beginner-friendly"
-//     };
-//     const optimized = await fetchOptimized(inputBox.value, answers);
-//     inputBox.value = optimized.optimized_prompt;
-// });
-
-// // 5️⃣ Helper display functions
-// function showScore(data) {
-//     let div = document.getElementById("scoreDiv");
-//     if (!div) {
-//         div = document.createElement("div");
-//         div.id = "scoreDiv";
-//         inputBox.parentNode.appendChild(div);
-//     }
-//     div.innerText = `Score: ${data.score} (${data.quality})`;
-// }
-
-// function showSuggestions(questions) {
-//     let div = document.getElementById("sugDiv");
-//     if (!div) {
-//         div = document.createElement("div");
-//         div.id = "sugDiv";
-//         div.style.background = "#f9f9f9";
-//         div.style.padding = "8px";
-//         inputBox.parentNode.appendChild(div);
-//     }
-//     div.innerHTML = questions.map(q => `<p>${q}</p>`).join("");
-// }
-
-// const textarea = document.getElementById("prompt-textarea");
-
-// textarea.addEventListener("input", async () => {
-//     const prompt = textarea.value;
-//     const largeText = document.getElementById("large-text-input").value;
-
-//     if (largeText && largeText.length > 200) { // threshold
-//         const response = await fetch("http://127.0.0.1:8000/optimize_context", {
-//             method: "POST",
-//             headers: { "Content-Type": "application/json" },
-//             body: JSON.stringify({ prompt: prompt, text: largeText })
-//         });
-//         const data = await response.json();
-
-//         const hintBox = document.getElementById("hint-box");
-//         hintBox.innerHTML = `
-//             💡 You can reduce tokens by ${data.tokens_saved}<br>
-//             Suggested context:<br>${data.optimized_context}
-//         `;
-//     }
-// });
-
-// extension / content.js
-// const API_BASE = "http://127.0.0.1:8000";
-
-// function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-
-// async function postJSON(path, body) {
-//     const res = await fetch(`${API_BASE}${path}`, {
-//         method: "POST",
-//         headers: { "Content-Type": "application/json" },
-//         body: JSON.stringify(body)
-//     });
-//     return await res.json();
-// }
-
-// function findTextarea() {
-//     // ChatGPT textarea tends to be a <textarea> in the composer
-//     return document.querySelector("textarea");
-// }
-
-// function createWidget() {
-//     const box = document.createElement("div");
-//     box.id = "spe-inline";
-//     box.style.position = "fixed";
-//     box.style.right = "16px";
-//     box.style.bottom = "120px";
-//     box.style.width = "320px";
-//     box.style.zIndex = "999999";
-//     box.style.background = "white";
-//     box.style.border = "1px solid #ddd";
-//     box.style.borderRadius = "12px";
-//     box.style.padding = "10px";
-//     box.style.boxShadow = "0 6px 18px rgba(0,0,0,0.12)";
-//     box.style.fontFamily = "system-ui, -apple-system, Segoe UI, Roboto";
-
-//     box.innerHTML = `
-//     <div style="font-weight:700;margin-bottom:6px;">Smart Prompt Engine</div>
-//     <div id="spe-score" style="font-size:13px;">Score: -- | Intent: --</div>
-//     <div id="spe-missing" style="font-size:12px;color:#555;margin-top:6px;">Missing: --</div>
-//     <button id="spe-best" style="margin-top:8px;width:100%;padding:8px;border-radius:10px;border:1px solid #ccc;background:#f7f7f7;cursor:pointer;">
-//       Use Best Rewrite
-//     </button>
-//     <div id="spe-status" style="font-size:12px;color:#777;margin-top:6px;"></div>
-//   `;
-
-//     document.body.appendChild(box);
-//     return box;
-// }
-
-// let widget = null;
-// let timer = null;
-// let lastRewrite = null;
-
-// async function updateForText(text) {
-//     if (!widget) return;
-//     const scoreEl = widget.querySelector("#spe-score");
-//     const missEl = widget.querySelector("#spe-missing");
-//     const statusEl = widget.querySelector("#spe-status");
-
-//     // local score first
-//     try {
-//         const s = await postJSON("/score", { prompt: text });
-//         scoreEl.textContent = `Score: ${s.score ?? "--"} | Intent: ${s.intent ?? "other"}`;
-//     } catch {
-//         scoreEl.textContent = "Score: -- | Intent: --";
-//     }
-
-//     // LLM rewrite suggestions (only if text is not tiny)
-//     if (text.trim().length < 10) {
-//         missEl.textContent = "Missing: --";
-//         lastRewrite = null;
-//         return;
-//     }
-
-//     statusEl.textContent = "Getting rewrite...";
-//     try {
-//         const r = await postJSON("/rewrite_suggestions", { prompt: text });
-//         if (r.error) {
-//             statusEl.textContent = `LLM unavailable`;
-//             missEl.textContent = "Missing: --";
-//             lastRewrite = null;
-//             return;
-//         }
-//         lastRewrite = r;
-//         const missing = Array.isArray(r.missing_info) ? r.missing_info.map(x => x.field).slice(0, 4) : [];
-//         missEl.textContent = missing.length ? `Missing: ${missing.join(", ")}` : "Missing: none ✅";
-//         statusEl.textContent = "";
-//     } catch {
-//         statusEl.textContent = "Rewrite failed";
-//         missEl.textContent = "Missing: --";
-//         lastRewrite = null;
-//     }
-// }
-
-// async function main() {
-//     widget = createWidget();
-//     const btn = widget.querySelector("#spe-best");
-//     btn.addEventListener("click", async () => {
-//         const ta = findTextarea();
-//         if (!ta || !lastRewrite) return;
-
-//         const cards = Array.isArray(lastRewrite.rewrite_cards) ? lastRewrite.rewrite_cards : [];
-//         if (!cards.length) return;
-
-//         // Use first card as "best" for now
-//         ta.value = cards[0];
-//         ta.dispatchEvent(new Event("input", { bubbles: true }));
-
-//         // Feedback
-//         try {
-//             await postJSON("/feedback", {
-//                 type: "rewrite_click",
-//                 prompt: (ta.value || ""),
-//                 intent: lastRewrite.intent || "other",
-//                 card_index: 0,
-//                 card_text: cards[0]
-//             });
-//         } catch { }
-//     });
-
-//     while (true) {
-//         const ta = findTextarea();
-//         if (ta) {
-//             ta.addEventListener("input", () => {
-//                 clearTimeout(timer);
-//                 const text = ta.value || "";
-//                 timer = setTimeout(() => updateForText(text), 800);
-//             });
-//         }
-//         await sleep(2000);
-//     }
-// }
-
-// main();
-
-// extension/content.js
-// Inline "Grammarly-style" widget for Smart Prompt Engine
-// Runs on chatgpt.com / openai.com pages via manifest content_scripts
-
-// extension/content.js
-// Inline "Grammarly-style" widget for Smart Prompt Engine
-// Runs on chatgpt.com / openai.com pages via manifest content_scripts
 console.log("SPE content.js loaded ✅");
-
-const API_BASE = "http://127.0.0.1:8000";
 
 function sleep(ms) {
     return new Promise((r) => setTimeout(r, ms));
 }
 
-// ✅ IMPORTANT: use background proxy (avoids page CSP)
 function postJSON(path, body) {
     return new Promise((resolve, reject) => {
         chrome.runtime.sendMessage({ type: "SPE_POST", path, body }, (resp) => {
@@ -263,22 +17,69 @@ function postJSON(path, body) {
     });
 }
 
-function findPromptBox() {
-    // 1) Preferred: visible textarea (not display:none)
-    const ta = document.querySelector("textarea[name='prompt-textarea']");
-    if (ta && ta.offsetParent !== null) return { type: "textarea", el: ta };
+function getSite() {
+    const h = location.hostname;
+    if (h.includes("chatgpt.com") || h.includes("chat.openai.com")) return "chatgpt";
+    if (h.includes("gemini.google.com")) return "gemini";
+    if (h.includes("claude.ai")) return "claude";
+    return "unknown";
+}
 
-    // 2) ChatGPT often uses contenteditable textbox
+function findPromptBox() {
+    const site = getSite();
+
+    if (site === "chatgpt") {
+        const ta = document.querySelector("textarea[name='prompt-textarea']");
+        if (ta && ta.offsetParent !== null) return { site, type: "textarea", el: ta };
+
+        const ce =
+            document.querySelector("div[contenteditable='true'][role='textbox']") ||
+            document.querySelector("div[contenteditable='true']#prompt-textarea") ||
+            document.querySelector("div[contenteditable='true']");
+        if (ce && ce.offsetParent !== null) return { site, type: "contenteditable", el: ce };
+
+        const anyTa = Array.from(document.querySelectorAll("textarea")).find(
+            (x) => x.offsetParent !== null
+        );
+        if (anyTa) return { site, type: "textarea", el: anyTa };
+        return null;
+    }
+
+    if (site === "gemini") {
+        const ce =
+            document.querySelector("div[contenteditable='true'][role='textbox']") ||
+            document.querySelector("div[contenteditable='true']");
+        if (ce && ce.offsetParent !== null) return { site, type: "contenteditable", el: ce };
+
+        const ta = Array.from(document.querySelectorAll("textarea")).find(
+            (x) => x.offsetParent !== null
+        );
+        if (ta) return { site, type: "textarea", el: ta };
+        return null;
+    }
+
+    if (site === "claude") {
+        const ce =
+            document.querySelector("div[contenteditable='true'][role='textbox']") ||
+            document.querySelector("div[contenteditable='true']");
+        if (ce && ce.offsetParent !== null) return { site, type: "contenteditable", el: ce };
+
+        const ta = Array.from(document.querySelectorAll("textarea")).find(
+            (x) => x.offsetParent !== null
+        );
+        if (ta) return { site, type: "textarea", el: ta };
+        return null;
+    }
+
     const ce =
         document.querySelector("div[contenteditable='true'][role='textbox']") ||
         document.querySelector("div[contenteditable='true']");
-    if (ce && ce.offsetParent !== null) return { type: "contenteditable", el: ce };
+    if (ce && ce.offsetParent !== null) return { site: "unknown", type: "contenteditable", el: ce };
 
-    // 3) Fallback: any visible textarea
     const anyTa = Array.from(document.querySelectorAll("textarea")).find(
         (x) => x.offsetParent !== null
     );
-    if (anyTa) return { type: "textarea", el: anyTa };
+    if (anyTa) return { site: "unknown", type: "textarea", el: anyTa };
 
     return null;
 }
@@ -286,20 +87,171 @@ function findPromptBox() {
 function getPromptText(box) {
     if (!box) return "";
     if (box.type === "textarea") return box.el.value || "";
-    // ✅ ProseMirror/contenteditable: textContent works better for paste + large text
     return box.el.textContent || "";
 }
 
 function setPromptText(box, text) {
     if (!box) return;
+
     if (box.type === "textarea") {
         box.el.value = text;
         box.el.dispatchEvent(new Event("input", { bubbles: true }));
         return;
     }
+
     box.el.focus();
-    box.el.textContent = text;
-    box.el.dispatchEvent(new Event("input", { bubbles: true }));
+
+    try {
+        document.execCommand("selectAll", false, null);
+        document.execCommand("insertText", false, text);
+    } catch {
+        box.el.innerText = text;
+    }
+
+    try {
+        box.el.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    } catch {
+        box.el.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    box.el.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+function getRect(el) {
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return {
+        left: r.left,
+        top: r.top,
+        right: r.right,
+        bottom: r.bottom,
+        width: r.width,
+        height: r.height,
+    };
+}
+
+function rectsOverlap(a, b) {
+    return !(a.right < b.left || a.left > b.right || a.bottom < b.top || a.top > b.bottom);
+}
+
+function clampWidgetToViewport(widgetEl) {
+    if (!widgetEl) return;
+    const w = getRect(widgetEl);
+    if (!w) return;
+
+    const gap = 8;
+    const maxLeft = Math.max(gap, window.innerWidth - w.width - gap);
+    const maxTop = Math.max(gap, window.innerHeight - w.height - gap);
+    const nextLeft = Math.min(maxLeft, Math.max(gap, w.left));
+    const nextTop = Math.min(maxTop, Math.max(gap, w.top));
+
+    widgetEl.style.left = `${nextLeft}px`;
+    widgetEl.style.top = `${nextTop}px`;
+    widgetEl.style.right = "auto";
+    widgetEl.style.bottom = "auto";
+}
+
+let activePromptEl = null;
+let widgetManualPosition = false;
+let widgetCollapsed = false;
+
+function repositionWidget(widgetEl, promptEl) {
+    if (!widgetEl) return;
+
+    const maxWidth = Math.min(340, Math.floor(window.innerWidth * 0.4));
+    widgetEl.style.width = `${Math.max(240, maxWidth)}px`;
+
+    if (widgetManualPosition) {
+        clampWidgetToViewport(widgetEl);
+        return;
+    }
+
+    let right = 16;
+    let bottom = 120;
+
+    widgetEl.style.right = `${right}px`;
+    widgetEl.style.bottom = `${bottom}px`;
+    widgetEl.style.left = "auto";
+    widgetEl.style.top = "auto";
+
+    const w = getRect(widgetEl);
+    const p = getRect(promptEl);
+    if (!w || !p) return;
+
+    if (rectsOverlap(w, p)) {
+        const extraGap = 14;
+        const newBottom = window.innerHeight - p.top + extraGap;
+        widgetEl.style.bottom = `${Math.min(newBottom, window.innerHeight - 80)}px`;
+    }
+}
+
+function syncMiniView(widgetEl) {
+    if (!widgetEl) return;
+    const scoreText = widgetEl.querySelector("#spe-score")?.textContent || "Score: -- | Intent: --";
+    const miniText = widgetEl.querySelector("#spe-mini-line");
+    if (miniText) miniText.textContent = scoreText;
+}
+
+function setCollapsedState(widgetEl, collapsed) {
+    if (!widgetEl) return;
+    widgetCollapsed = collapsed;
+    const body = widgetEl.querySelector("#spe-body");
+    const mini = widgetEl.querySelector("#spe-mini");
+    const collapseBtn = widgetEl.querySelector("#spe-collapse");
+    if (body) body.style.display = collapsed ? "none" : "block";
+    if (mini) mini.style.display = collapsed ? "block" : "none";
+    if (collapseBtn) collapseBtn.textContent = collapsed ? "+" : "—";
+    repositionWidget(widgetEl, activePromptEl);
+}
+
+function makeWidgetDraggable(widgetEl) {
+    if (!widgetEl) return;
+    const header = widgetEl.querySelector("#spe-header");
+    if (!header || header.dataset.speDragBound) return;
+    header.dataset.speDragBound = "1";
+    header.style.cursor = "move";
+
+    let startX = 0;
+    let startY = 0;
+    let baseLeft = 0;
+    let baseTop = 0;
+    let dragging = false;
+
+    const onMove = (e) => {
+        if (!dragging) return;
+        const nextLeft = baseLeft + (e.clientX - startX);
+        const nextTop = baseTop + (e.clientY - startY);
+        widgetEl.style.left = `${nextLeft}px`;
+        widgetEl.style.top = `${nextTop}px`;
+        widgetEl.style.right = "auto";
+        widgetEl.style.bottom = "auto";
+        clampWidgetToViewport(widgetEl);
+    };
+
+    const onUp = () => {
+        dragging = false;
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+    };
+
+    header.addEventListener("pointerdown", (e) => {
+        if (e.button !== 0) return;
+        if (e.target.closest("button")) return;
+        const rect = widgetEl.getBoundingClientRect();
+        widgetEl.style.left = `${rect.left}px`;
+        widgetEl.style.top = `${rect.top}px`;
+        widgetEl.style.right = "auto";
+        widgetEl.style.bottom = "auto";
+
+        startX = e.clientX;
+        startY = e.clientY;
+        baseLeft = rect.left;
+        baseTop = rect.top;
+        dragging = true;
+        widgetManualPosition = true;
+        e.preventDefault();
+        window.addEventListener("pointermove", onMove);
+        window.addEventListener("pointerup", onUp);
+    });
 }
 
 function createWidget() {
@@ -320,75 +272,97 @@ function createWidget() {
     box.style.boxShadow = "0 6px 18px rgba(0,0,0,0.12)";
     box.style.fontFamily = "system-ui, -apple-system, Segoe UI, Roboto";
     box.style.color = "#111";
+    box.style.webkitTextFillColor = "#111";
+    const iconUrl = chrome.runtime.getURL("icon/spe-48.png");
 
     box.innerHTML = `
-    <div style="display:flex; justify-content:space-between; align-items:center;">
-      <div style="font-weight:700;">Smart Prompt Engine</div>
-      <button id="spe-close" style="border:none;background:transparent;cursor:pointer;font-size:16px;">✕</button>
+    <div id="spe-header" style="display:flex; justify-content:space-between; align-items:center;">
+      <div style="display:flex; align-items:center; gap:1px;">
+        <img src="${iconUrl}" alt="SPE" style="width:25px;height:25px;display:block;margin-bottom:-2px;transition:transform 140ms ease;" />
+        <div style="font-weight:700;font-size:16px;line-height:22px;white-space:nowrap;">Smart Prompt Engine</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <button id="spe-collapse" style="border:none;background:transparent;cursor:pointer;font-size:16px;color:#111 !important;-webkit-text-fill-color:#111 !important;opacity:1 !important;">—</button>
+        <button id="spe-close" style="border:none;background:transparent;cursor:pointer;font-size:16px;color:#111 !important;-webkit-text-fill-color:#111 !important;opacity:1 !important;">✕</button>
+      </div>
     </div>
+    <div id="spe-mini" style="display:none;font-size:12px;color:#333;margin-top:8px;">
+      <span id="spe-mini-line">Score: -- | Intent: --</span>
+    </div>
+    <div id="spe-body">
+      <div id="spe-score" style="font-size:13px;margin-top:6px;">Score: -- | Intent: --</div>
+      <div id="spe-missing" style="font-size:12px;color:#555;margin-top:6px;">Missing: --</div>
+      <div id="spe-status" style="font-size:12px;color:#777;margin-top:8px;"></div>
 
-    <div id="spe-score" style="font-size:13px;margin-top:6px;">Score: -- | Intent: --</div>
-    <div id="spe-missing" style="font-size:12px;color:#555;margin-top:6px;">Missing: --</div>
-    <div id="spe-status" style="font-size:12px;color:#777;margin-top:8px;"></div>
+      <div id="spe-token" style="margin-top:10px;padding-top:10px;border-top:1px solid #eee;">
+        <div style="font-weight:600;font-size:13px;">Token Saver</div>
+        <div id="spe-token-status" style="font-size:12px;color:#666;margin-top:4px;">
+          Paste large text/code/data to enable (or 5+ CSV rows).
+        </div>
 
-    <div id="spe-token" style="margin-top:10px;padding-top:10px;border-top:1px solid #eee;">
-      <div style="font-weight:600;font-size:13px;">Token Saver</div>
-      <div id="spe-token-status" style="font-size:12px;color:#666;margin-top:4px;">
-        Paste large text/code/data to enable (or 5+ CSV rows).
+        <button id="spe-compress" disabled style="margin-top:8px;width:100%;padding:9px;border-radius:12px;border:1px solid #ccc;background:#f7f7f7;cursor:pointer;color:#111 !important;-webkit-text-fill-color:#111 !important;opacity:1 !important;">
+          Compress (Token Saver)
+        </button>
+
+        <div id="spe-token-actions" style="display:none;margin-top:8px;">
+          <button id="spe-use-compressed" style="width:100%;padding:8px;border-radius:12px;border:1px solid #ccc;background:#fff;cursor:pointer;color:#111 !important;-webkit-text-fill-color:#111 !important;opacity:1 !important;">
+            Use Compressed
+          </button>
+          <button id="spe-use-full" style="width:100%;padding:8px;border-radius:12px;border:1px solid #ccc;background:#fff;cursor:pointer;margin-top:6px;color:#111 !important;-webkit-text-fill-color:#111 !important;opacity:1 !important;">
+            Use Full
+          </button>
+        </div>
       </div>
 
-      <button id="spe-compress" disabled style="margin-top:8px;width:100%;padding:9px;border-radius:12px;border:1px solid #ccc;background:#f7f7f7;cursor:pointer;">
-        Compress (Token Saver)
+      <button id="spe-best" disabled style="margin-top:10px;width:100%;padding:9px;border-radius:12px;border:1px solid #ccc;background:#f7f7f7;cursor:pointer;color:#111 !important;-webkit-text-fill-color:#111 !important;opacity:1 !important;">
+        Use Best Rewrite
       </button>
-
-      <div id="spe-token-actions" style="display:none;margin-top:8px;">
-        <button id="spe-use-compressed" style="width:100%;padding:8px;border-radius:12px;border:1px solid #ccc;background:#fff;cursor:pointer;">
-          Use Compressed
-        </button>
-        <button id="spe-use-full" style="width:100%;padding:8px;border-radius:12px;border:1px solid #ccc;background:#fff;cursor:pointer;margin-top:6px;">
-          Use Full
-        </button>
-      </div>
     </div>
-
-    <button id="spe-best" disabled style="margin-top:10px;width:100%;padding:9px;border-radius:12px;border:1px solid #ccc;background:#f7f7f7;cursor:pointer;">
-      Use Best Rewrite
-    </button>
   `;
 
     document.body.appendChild(box);
+    const logo = box.querySelector("img");
+    logo?.addEventListener("mouseenter", (e) => {
+        e.target.style.transform = "scale(1.08)";
+    });
+    logo?.addEventListener("mouseleave", (e) => {
+        e.target.style.transform = "scale(1)";
+    });
     box.querySelector("#spe-close").onclick = () => box.remove();
+    box.querySelector("#spe-collapse").onclick = () => setCollapsedState(box, !widgetCollapsed);
+    makeWidgetDraggable(box);
+    setCollapsedState(box, false);
     return box;
 }
 
-// -------------------- State --------------------
 let widget = createWidget();
 let debounceTimer = null;
 let lastRewrite = null;
 
-// --- A: Stability helpers ---
 const SCORE_DEBOUNCE_MS = 1200;
-const LLM_MIN_LEN = 25;
+const LLM_MIN_LEN = 12;
 const LLM_SCORE_THRESHOLD = 75;
+const REWRITE_THROTTLE_MS = 2500;
+const REWRITE_IDLE_BYPASS_MS = 800;
 
 let lastSentText = "";
 let lastMeaningfulText = "";
 let lastCallId = 0;
 let rewriteLocked = false;
 let lockedText = "";
+let lastInputAt = 0;
+let lastRewriteAt = 0;
+let lastRewritePrompt = "";
 
-// simple in-memory caches (avoid repeated hits)
-const scoreCache = new Map(); // key: prompt -> response
-const llmCache = new Map();   // key: prompt -> response
+const scoreCache = new Map();
+const llmCache = new Map();
 
-// Token Saver state
 let tokenUIReady = false;
-let tokenInputText = ""; // latest large text
-let lastToken = null;    // backend /compress response
+let tokenInputText = "";
+let lastToken = null;
 let lastFullText = "";
 
 function normalizeText(t) {
-    // Preserve line breaks (important for CSV/code/log detection), normalize per-line spacing.
     return (t || "")
         .split("\n")
         .map((ln) => ln.trim().replace(/[ \t]+/g, " "))
@@ -412,18 +386,34 @@ function isMeaningfulChange(prev, next) {
     return prevLast !== nextLast;
 }
 
-// -------------------- Token Saver helpers --------------------
+function textChangedALot(prev, next) {
+    if (!prev) return true;
+
+    const deltaLen = Math.abs((next || "").length - (prev || "").length);
+    if (deltaLen >= 30) return true;
+
+    const prevWords = (prev.match(/\S+/g) || []).length;
+    const nextWords = (next.match(/\S+/g) || []).length;
+    if (Math.abs(nextWords - prevWords) >= 6) return true;
+
+    const maxLen = Math.max(prev.length, next.length) || 1;
+    const minLen = Math.min(prev.length, next.length);
+    let i = 0;
+    while (i < minLen && prev[i] === next[i]) i += 1;
+    const changedRatio = 1 - (i / maxLen);
+    return changedRatio >= 0.45;
+}
+
 function formatPct(before, after) {
     if (!before) return 0;
-    return Math.round(((before - after) / before) * 100);
+    return Math.max(0, Math.round(((before - after) / before) * 100));
 }
 
 function detectLargePaste(prompt) {
     const raw = (prompt || "").trim();
     if (!raw) return null;
-    if (raw.length >= 400) return raw; // default threshold
+    if (raw.length >= 400) return raw;
 
-    // Allow smaller tabular payloads (CSV/TSV-like) to use Token Saver.
     const lines = raw.split("\n").map((ln) => ln.trim()).filter(Boolean);
     if (lines.length >= 5) {
         const delimiterLines = lines.filter((ln) => /[,;\t|]/.test(ln)).length;
@@ -506,7 +496,6 @@ function initTokenSaverUI() {
     };
 }
 
-// ✅ update token saver state (no onclick rebinding here)
 function setupTokenSaverUI(trimmed) {
     initTokenSaverUI();
 
@@ -534,7 +523,6 @@ function setupTokenSaverUI(trimmed) {
     tokenStatus.textContent = tokenSaverReadyText(bigText.length);
 }
 
-// -------------------- Main update flow --------------------
 async function updateForText(text) {
     const callId = ++lastCallId;
     const trimmed = normalizeText(text);
@@ -545,6 +533,7 @@ async function updateForText(text) {
 
     if (!trimmed) {
         scoreEl.textContent = "Score: -- | Intent: --";
+        syncMiniView(widget);
         missEl.textContent = "Missing: --";
         statusEl.textContent = "";
         useBtn.disabled = true;
@@ -552,18 +541,17 @@ async function updateForText(text) {
         rewriteLocked = false;
         lockedText = "";
         lastSentText = "";
+        lastInputAt = 0;
         setupTokenSaverUI("");
         return;
     }
 
     lastSentText = trimmed;
 
-    // ✅ Token saver should always update even for short prompts
     setupTokenSaverUI(trimmed);
 
     let localScore = null;
 
-    // 1) score (cached)
     try {
         statusEl.textContent = "Scoring...";
         let s = scoreCache.get(trimmed);
@@ -578,6 +566,7 @@ async function updateForText(text) {
         const score = typeof s.score === "number" ? s.score : "--";
         const intent = s.intent || "other";
         scoreEl.textContent = `Score: ${score} | Intent: ${intent}`;
+        syncMiniView(widget);
         statusEl.textContent = "";
 
         const scoreNum = typeof s.score === "number" ? s.score : 0;
@@ -602,7 +591,6 @@ async function updateForText(text) {
         statusEl.textContent = "Score failed";
     }
 
-    // 2) LLM rewrite — only when worth it
     if (rewriteLocked) {
         const now = normalizeText(trimmed);
         if (!isMeaningfulChange(lockedText, now)) {
@@ -625,10 +613,28 @@ async function updateForText(text) {
         return;
     }
 
+    const localMissingText = missEl.textContent;
     try {
         statusEl.textContent = "Rewrite...";
         let r = llmCache.get(trimmed);
         if (!r) {
+            const now = Date.now();
+            const cooldownMs = now - lastRewriteAt;
+            const idleMs = now - lastInputAt;
+            const bypassCooldown =
+                idleMs > REWRITE_IDLE_BYPASS_MS &&
+                textChangedALot(lastRewritePrompt, trimmed);
+
+            if (cooldownMs < REWRITE_THROTTLE_MS && !bypassCooldown) {
+                statusEl.textContent = "";
+                useBtn.disabled = true;
+                lastRewrite = null;
+                setupTokenSaverUI(trimmed);
+                return;
+            }
+
+            lastRewriteAt = now;
+            lastRewritePrompt = trimmed;
             r = await postJSON("/rewrite_suggestions", { prompt: trimmed });
             llmCache.set(trimmed, r);
         }
@@ -637,6 +643,7 @@ async function updateForText(text) {
 
         if (r.error) {
             statusEl.textContent = "LLM unavailable";
+            missEl.textContent = localMissingText;
             useBtn.disabled = true;
             lastRewrite = null;
             setupTokenSaverUI(trimmed);
@@ -662,13 +669,13 @@ async function updateForText(text) {
             `Missing (required): ${reqFields.length ? reqFields.join(", ") : "none ✅"} | ` +
             `Optional: ${optFields.length ? optFields.join(", ") : "none"}`;
 
-        // Only overwrite local score if LLM score looks valid.
         if (typeof r.score === "number" && r.score > 0) {
             const llmIntent = (r.intent && r.intent !== "other") ? r.intent : null;
             const current = scoreEl.textContent || "";
             const currentIntentMatch = current.match(/Intent:\s*([a-zA-Z_]+)/);
             const currentIntent = currentIntentMatch ? currentIntentMatch[1] : "other";
             scoreEl.textContent = `Score: ${r.score} | Intent: ${llmIntent || currentIntent}`;
+            syncMiniView(widget);
         }
 
         statusEl.textContent = "";
@@ -677,6 +684,7 @@ async function updateForText(text) {
         if (callId !== lastCallId) return;
         console.error("[SPE] /rewrite_suggestions failed:", e);
         statusEl.textContent = "Rewrite failed";
+        missEl.textContent = localMissingText;
         useBtn.disabled = true;
         lastRewrite = null;
     }
@@ -684,7 +692,55 @@ async function updateForText(text) {
     setupTokenSaverUI(trimmed);
 }
 
-// -------------------- Binding loop --------------------
+function bindPromptBox(box) {
+    if (!box || !box.el || box.el.dataset.speBound) return false;
+
+    box.el.dataset.speBound = "1";
+    activePromptEl = box.el;
+    repositionWidget(widget, activePromptEl);
+    console.log("[SPE] prompt box bound");
+
+    box.el.addEventListener("input", () => {
+        clearTimeout(debounceTimer);
+        lastInputAt = Date.now();
+        const text = getPromptText(box);
+        debounceTimer = setTimeout(() => {
+            const clean = normalizeText(text);
+            if (!clean) return updateForText(clean);
+            if (!isMeaningfulChange(lastMeaningfulText, clean)) return;
+            lastMeaningfulText = clean;
+            updateForText(clean);
+        }, SCORE_DEBOUNCE_MS);
+    });
+
+    const existing = getPromptText(box);
+    if (existing.trim()) {
+        const clean = normalizeText(existing);
+        lastMeaningfulText = clean;
+        updateForText(clean);
+    } else {
+        setupTokenSaverUI("");
+    }
+
+    return true;
+}
+
+function observeChatGPTDom() {
+    const observer = new MutationObserver(() => {
+        const box = findPromptBox();
+        if (box?.el) {
+            activePromptEl = box.el;
+            repositionWidget(widget, activePromptEl);
+        }
+        bindPromptBox(box);
+    });
+
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+    });
+}
+
 async function bindTextareaLoop() {
     const useBtn = widget.querySelector("#spe-best");
 
@@ -696,7 +752,6 @@ async function bindTextareaLoop() {
         const opt = Array.isArray(lastRewrite.optional_missing) ? lastRewrite.optional_missing : [];
         const cards = Array.isArray(lastRewrite.rewrite_cards) ? lastRewrite.rewrite_cards : [];
 
-        // If nothing is missing, do not overwrite user's prompt.
         if (req.length === 0 && opt.length === 0) {
             const statusEl = widget.querySelector("#spe-status");
             if (statusEl) statusEl.textContent = "Looks complete ✅ No rewrite needed.";
@@ -721,32 +776,18 @@ async function bindTextareaLoop() {
 
     while (true) {
         const box = findPromptBox();
-        if (box && !box.el.dataset.speBound) {
-            box.el.dataset.speBound = "1";
-
-            box.el.addEventListener("input", () => {
-                clearTimeout(debounceTimer);
-                const text = getPromptText(box);
-                debounceTimer = setTimeout(() => {
-                    const clean = normalizeText(text);
-                    if (!clean) return updateForText(clean);
-                    if (!isMeaningfulChange(lastMeaningfulText, clean)) return;
-                    lastMeaningfulText = clean;
-                    updateForText(clean);
-                }, SCORE_DEBOUNCE_MS);
-            });
-
-            const existing = getPromptText(box);
-            if (existing.trim()) {
-                const clean = normalizeText(existing);
-                lastMeaningfulText = clean;
-                updateForText(clean);
-            }
-            else setupTokenSaverUI(""); // init UI state
+        if (box?.el) {
+            activePromptEl = box.el;
+            repositionWidget(widget, activePromptEl);
         }
+        bindPromptBox(box);
 
         await sleep(1200);
     }
 }
 
+window.addEventListener("resize", () => repositionWidget(widget, activePromptEl));
+repositionWidget(widget, findPromptBox()?.el || null);
+
+observeChatGPTDom();
 bindTextareaLoop();

@@ -12,16 +12,41 @@
         "http://localhost:8000/*"
     ],
     "action": {
-        "default_popup": "popup.html"
+        "default_popup": "popup.html",
+        "default_icon": {
+            "16": "icon/spe-16.png",
+            "48": "icon/spe-48.png",
+            "128": "icon/spe-128.png"
+        }
+    },
+    "icons": {
+        "16": "icon/spe-16.png",
+        "48": "icon/spe-48.png",
+        "128": "icon/spe-128.png"
     },
     "background": {
         "service_worker": "background.js"
     },
+    "web_accessible_resources": [
+        {
+            "resources": [
+                "icon/*.png"
+            ],
+            "matches": [
+                "*://*.openai.com/*",
+                "*://chatgpt.com/*",
+                "*://gemini.google.com/*",
+                "*://claude.ai/*"
+            ]
+        }
+    ],
     "content_scripts": [
         {
             "matches": [
+                "*://*.openai.com/*",
                 "*://chatgpt.com/*",
-                "*://*.openai.com/*"
+                "*://gemini.google.com/*",
+                "*://claude.ai/*"
             ],
             "js": [
                 "content.js"

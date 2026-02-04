@@ -52,7 +52,7 @@ class OpenAITextClient:
                 ],
                 temperature=temperature,
                 max_tokens=max_tokens,
-                response_format={"type": "json_object"},  # ✅ key fix
+                response_format={"type": "json_object"},  # key fix
             )
             content = resp.choices[0].message.content or "{}"
             import json

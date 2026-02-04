@@ -180,11 +180,47 @@ def _field_is_already_covered(prompt: str, item: dict) -> bool:
     for kw in [
         "budget", "region", "country", "usa", "price",
         "camera", "battery", "iphone", "android", "new", "refurb",
+        "priority", "condition", "unlocked", "storage",
     ]:
         if kw in field and kw in p:
             return True
 
     return False
+
+
+def _canonical_field_tag(name: str) -> str:
+    n = (name or "").lower().strip()
+    if any(x in n for x in ["budget", "price", "cost"]):
+        return "budget"
+    if any(x in n for x in ["region", "country", "location", "market", "usa"]):
+        return "region"
+    if any(x in n for x in ["priority", "criteria", "feature", "camera", "battery"]):
+        return "priority_criteria"
+    if any(x in n for x in ["condition", "new", "refurb", "used"]):
+        return "condition"
+    if any(x in n for x in ["storage", "capacity", "gb"]):
+        return "storage"
+    if any(x in n for x in ["model_year", "year"]):
+        return "model_year"
+    if any(x in n for x in ["carrier", "unlocked"]):
+        return "carrier_unlocked"
+    if any(x in n for x in ["color", "colour"]):
+        return "color_preference"
+    return n
+
+
+def _drop_already_provided_fields(
+    provided_info: Any, missing_info: List[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    provided_tags = {
+        _canonical_field_tag((x or {}).get("field", ""))
+        for x in (provided_info or [])
+        if isinstance(x, dict)
+    }
+    return [
+        m for m in missing_info
+        if _canonical_field_tag((m or {}).get("field", "")) not in provided_tags
+    ]
 
 
 def _format_fill_block(required_missing: List[Dict[str, Any]],
@@ -249,7 +285,14 @@ def _normalize_cards(original_prompt: str,
             # Take ONLY the first line; strip any "Fill these" junk the model wrote
             first_line = cards_list[i].strip().splitlines()[0].strip()
 
-        if not first_line or "fill these" in first_line.lower():
+        low = first_line.lower()
+        looks_like_fill_junk = (
+            ("fill these" in low)
+            or bool(re.match(r"^\s*[-*]\s+", first_line))
+            or (": ____" in first_line)
+            or low.startswith("field:")
+        )
+        if not first_line or looks_like_fill_junk:
             first_line = fallback_first_lines[i]
 
         card = f"{first_line}\n\n{fill}"
@@ -261,10 +304,7 @@ def _normalize_cards(original_prompt: str,
 def _clean_rewrite_card(card: str) -> str:
     if not isinstance(card, str):
         return ""
-    # Remove optional block when it only says none.
-    card = card.replace("Fill these (optional):\n- none", "").strip()
-    card = card.replace("Fill these (optional):\n- None", "").strip()
-    return card
+    return card.strip()
 
 
 def _extract_fill_fields(prompt: str) -> set[str]:
@@ -274,11 +314,58 @@ def _extract_fill_fields(prompt: str) -> set[str]:
     return fields
 
 
+def _extract_blank_fill_items(prompt: str) -> tuple[bool, List[Dict[str, Any]]]:
+    p = prompt or ""
+    low = p.lower()
+    req_marker = "fill these (required):"
+    opt_marker = "fill these (optional):"
+
+    req_pos = low.find(req_marker)
+    if req_pos < 0:
+        return False, []
+
+    opt_pos = low.find(opt_marker, req_pos)
+    req_block = p[req_pos + len(req_marker): opt_pos if opt_pos >= 0 else len(p)]
+    opt_block = p[opt_pos + len(opt_marker):] if opt_pos >= 0 else ""
+
+    def _parse_block(block: str, optional: bool) -> List[Dict[str, Any]]:
+        out: List[Dict[str, Any]] = []
+        for raw in block.splitlines():
+            line = raw.strip()
+            if not line.startswith("-"):
+                continue
+            if "none" in line.lower():
+                continue
+
+            m = re.match(r"^\s*-\s*([^:]+):\s*(.*)$", line)
+            if not m:
+                continue
+            field = _clean_field_name(m.group(1).strip())
+            rhs = (m.group(2) or "").strip()
+            if (not field) or ("____" not in rhs):
+                continue
+
+            ex_match = re.search(r"\(([^)]*)\)\s*$", rhs)
+            ex = ex_match.group(1).strip() if ex_match else ""
+            out.append({
+                "field": field,
+                "optional": optional,
+                "why": "",
+                "example": ex,
+                "evidence": "blank in Fill block",
+            })
+        return out
+
+    items = _parse_block(req_block, optional=False) + _parse_block(opt_block, optional=True)
+    return True, items
+
+
 # ---------- Main function ----------
 
 def get_rewrite_suggestions(prompt: str, client: OpenAITextClient) -> Dict[str, Any]:
     p = (prompt or "").strip()
     system = SYSTEM + f"\n\nSYSTEM_VERSION={SYSTEM_VERSION}"
+    has_fill_block, blank_fill_items = _extract_blank_fill_items(p)
 
     try:
         data = client.complete_json(
@@ -291,15 +378,14 @@ def get_rewrite_suggestions(prompt: str, client: OpenAITextClient) -> Dict[str, 
         raise
 
     provided_info = data.get("provided_info", [])
-    missing_info = _sanitize_missing_info(data.get("missing_info", []))
-    if "fill these" in p.lower():
-        allowed = _extract_fill_fields(p)
-        missing_info = [
-            m for m in missing_info
-            if (m.get("field", "").lower() in allowed)
-        ]
-    missing_info = [m for m in missing_info if not _field_is_already_covered(p, m)]
-    missing_info = _postprocess_missing(p, missing_info)
+    if has_fill_block:
+        # Hard rule: once prompt contains a Fill block, only track fields still blank (____).
+        missing_info = _sanitize_missing_info(blank_fill_items)
+    else:
+        missing_info = _sanitize_missing_info(data.get("missing_info", []))
+        missing_info = _drop_already_provided_fields(provided_info, missing_info)
+        missing_info = [m for m in missing_info if not _field_is_already_covered(p, m)]
+        missing_info = _postprocess_missing(p, missing_info)
 
     required_missing = [
         m for m in missing_info if not m.get("optional", False)]
