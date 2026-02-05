@@ -239,6 +239,9 @@ def rewrite_suggestions_endpoint(data: RewriteData, request: Request):
 @app.post("/compress")
 def compress_endpoint(data: CompressData):
     text = (data.text or "").strip()
+    # Normalize literal \n sequences into real newlines (common from contenteditable)
+    if "\\n" in text and "\n" not in text:
+        text = text.replace("\\n", "\n")
 
     if not text:
         return {"detected_type": "empty", "compressed": "", "stats": {"chars_in": 0, "chars_out": 0}}

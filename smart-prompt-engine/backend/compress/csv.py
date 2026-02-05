@@ -16,6 +16,10 @@ def detect_csv_reason(text: str) -> Tuple[bool, str]:
     if not raw:
         return False, "empty"
 
+    low = raw.lower()
+    if "traceback" in low or "exception" in low or "error" in low:
+        return False, "looks_like_logs"
+
     lines = [ln for ln in raw.splitlines() if ln.strip()]
     if len(lines) < 3:
         return False, "need_at_least_3_lines"
