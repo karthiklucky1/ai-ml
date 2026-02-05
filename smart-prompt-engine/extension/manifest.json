@@ -31,7 +31,7 @@
                 "icon/*.png"
             ],
             "matches": [
-                "*://*.openai.com/*",
+                "*://chat.openai.com/*",
                 "*://chatgpt.com/*",
                 "*://gemini.google.com/*",
                 "*://claude.ai/*"
@@ -41,7 +41,7 @@
     "content_scripts": [
         {
             "matches": [
-                "*://*.openai.com/*",
+                "*://chat.openai.com/*",
                 "*://chatgpt.com/*",
                 "*://gemini.google.com/*",
                 "*://claude.ai/*"
