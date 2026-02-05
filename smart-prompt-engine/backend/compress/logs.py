@@ -5,12 +5,20 @@ from typing import Dict, Any, Tuple
 
 
 LOG_LEVEL = re.compile(
-    r"(?m)^\s*(INFO|ERROR|WARN|WARNING|DEBUG|CRITICAL)\s*[:\]]")
+    r"(?m)^\s*(INFO|ERROR|WARN|WARNING|DEBUG|CRITICAL)\b")
 TIMESTAMP = re.compile(r"(?m)^\s*\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}")
 TRACEBACK = re.compile(r"traceback \(most recent call last\):?", re.IGNORECASE)
 FILE_LINE = re.compile(r'(?m)^\s*File ".*", line \d+')
 EXC_NAME = re.compile(
     r"(ModuleNotFoundError|TypeError|ValueError|KeyError|RuntimeError|Exception|Error)\b"
+)
+LOG_KEYWORDS = (
+    "traceback",
+    "exception",
+    "error",
+    "failed",
+    "timeout",
+    "stack trace",
 )
 
 
@@ -37,6 +45,11 @@ def detect_log_reason(text: str) -> Tuple[bool, str]:
 
 
 def looks_like_log(text: str) -> bool:
+    if not text:
+        return False
+    low = text.lower()
+    if any(k in low for k in LOG_KEYWORDS):
+        return True
     ok, _ = detect_log_reason(text)
     return ok
 

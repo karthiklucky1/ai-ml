@@ -696,18 +696,25 @@ function bindPromptBox(box) {
     box.el.dataset.speBound = "1";
     activePromptEl = box.el;
     repositionWidget(widget, activePromptEl);
-    box.el.addEventListener("input", () => {
+    const onChange = () => {
         clearTimeout(debounceTimer);
         lastInputAt = Date.now();
-        const text = getPromptText(box);
         debounceTimer = setTimeout(() => {
-            const clean = normalizeText(text);
-            if (!clean) return updateForText(clean);
-            if (!isMeaningfulChange(lastMeaningfulText, clean)) return;
+            const clean = normalizeText(getPromptText(box));
+            if (!clean) {
+                lastMeaningfulText = "";
+                return updateForText(clean);
+            }
+            if (clean === lastMeaningfulText) return;
             lastMeaningfulText = clean;
             updateForText(clean);
-        }, SCORE_DEBOUNCE_MS);
-    });
+        }, 250);
+    };
+    box.el.addEventListener("input", onChange);
+    box.el.addEventListener("keyup", onChange);
+    box.el.addEventListener("paste", () => setTimeout(onChange, 0));
+    box.el.addEventListener("cut", () => setTimeout(onChange, 0));
+    box.el.addEventListener("compositionend", onChange);
 
     const existing = getPromptText(box);
     if (existing.trim()) {
@@ -787,3 +794,9 @@ repositionWidget(widget, findPromptBox()?.el || null);
 
 observeChatGPTDom();
 bindTextareaLoop();
+document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    const box = findPromptBox();
+    if (!box) return;
+    updateForText(getPromptText(box));
+});
