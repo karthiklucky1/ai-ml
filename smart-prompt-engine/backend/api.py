@@ -246,8 +246,7 @@ def compress_endpoint(data: CompressData):
     if not text:
         return {"detected_type": "empty", "compressed": "", "stats": {"chars_in": 0, "chars_out": 0}}
 
-    print("COMPRESS LEN:", len(text))
-    print("FIRST 200 CHARS:\n", text[:200])
+    # Debug logging intentionally disabled for production.
 
     is_log, why_log = detect_log_reason(text)
     is_json, why_json = detect_json_reason(text)
@@ -255,10 +254,7 @@ def compress_endpoint(data: CompressData):
     is_csv, why_csv = detect_csv_reason(text)
 
     # Keep explicit debug parity with the detector booleans.
-    print("[DETECT] logs =", looks_like_log(text), "|", why_log)
-    print("[DETECT] json =", looks_like_json(text), "|", why_json)
-    print("[DETECT] code =", looks_like_code(text), "|", why_code)
-    print("[DETECT] csv  =", looks_like_csv(text), "|", why_csv)
+    # Debug logging intentionally disabled for production.
 
     debug = {
         "logs": {"match": is_log, "why": why_log},
