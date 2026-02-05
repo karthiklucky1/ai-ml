@@ -1,5 +1,4 @@
 const API_BASES = [
-    "http://127.0.0.1:8000",
     "https://smart-prompt-engine-edfa.up.railway.app",
 ];
 
@@ -125,7 +124,7 @@ async function callScoreAPI(prompt) {
         intentText.textContent = "Intent: --";
         if (llmMissingDiv) {
             llmMissingDiv.textContent =
-                "Could not reach backend. Tried local (127.0.0.1:8000) and Render.";
+                "Service temporarily unavailable. Please try again.";
         }
         console.error(err);
         optimizeBtn.disabled = true;

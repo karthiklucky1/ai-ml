@@ -1,5 +1,3 @@
-console.log("SPE content.js loaded ✅");
-
 function sleep(ms) {
     return new Promise((r) => setTimeout(r, ms));
 }
@@ -698,8 +696,6 @@ function bindPromptBox(box) {
     box.el.dataset.speBound = "1";
     activePromptEl = box.el;
     repositionWidget(widget, activePromptEl);
-    console.log("[SPE] prompt box bound");
-
     box.el.addEventListener("input", () => {
         clearTimeout(debounceTimer);
         lastInputAt = Date.now();

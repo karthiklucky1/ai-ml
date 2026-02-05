@@ -1,6 +1,5 @@
 // extension/background.js
 const API_BASES = [
-    "http://127.0.0.1:8000",
     "https://smart-prompt-engine-edfa.up.railway.app",
 ];
 const USER_KEY = "spe_user_id";
