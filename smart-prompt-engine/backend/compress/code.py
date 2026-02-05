@@ -70,40 +70,21 @@ def compress_code(text: str) -> Dict[str, Any]:
     lines_in = len(lines)
     chars_in = len(raw)
 
-    # Remove very long blank/whitespace runs
-    cleaned = []
-    for ln in lines:
-        if ln.strip() == "":
-            continue
-        cleaned.append(ln)
-
-    # Prefer keeping: imports + function/class definitions + error-related lines
-    keep = []
-
-    for ln in cleaned:
+    keep_idx = set()
+    for i, ln in enumerate(lines):
         s = ln.strip()
-        if s.startswith(("import ", "from ")):
-            keep.append(ln)
-        elif s.startswith(("def ", "class ", "function ")):
-            keep.append(ln)
-        elif re.search(r"(Error|Exception|Traceback|TypeError|ValueError|KeyError)", ln):
-            keep.append(ln)
-        elif s.startswith(("return", "raise", "await ", "async ")):
-            keep.append(ln)
+        if s.startswith(("import ", "from ", "def ", "class ", "function ")):
+            keep_idx.add(i)
+        if "return" in s or "raise" in s:
+            keep_idx.add(i)
+        if re.search(r"(Error|Exception|Traceback|TypeError|ValueError|KeyError|TODO|FIXME)", ln):
+            keep_idx.add(i)
 
-    # Also keep a small tail window (context)
-    tail = cleaned[-40:] if len(cleaned) > 40 else cleaned
-    keep.extend(tail)
+    for i in range(max(0, len(lines) - 10), len(lines)):
+        keep_idx.add(i)
 
-    # Dedupe with whitespace normalization
-    seen = set()
-    out = []
-    for ln in keep:
-        key = " ".join(ln.strip().split())
-        if not key or key in seen:
-            continue
-        seen.add(key)
-        out.append(ln)
+    ordered_idx = sorted(keep_idx)
+    out = [lines[i] for i in ordered_idx if lines[i].strip()]
 
     compressed = "\n".join(out).strip()
 

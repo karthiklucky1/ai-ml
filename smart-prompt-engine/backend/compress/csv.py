@@ -56,69 +56,59 @@ def compress_csv(text: str, sample_rows: int = 3) -> Dict[str, Any]:
         return {
             "detected_type": "empty",
             "compressed": "",
-            "stats": {"chars_in": 0, "chars_out": 0},
+            "stats": {"chars_in": 0, "chars_out": 0}
         }
 
     chars_in = len(raw)
-
-    lines = [ln for ln in raw.splitlines() if ln.strip()]
-    lines_in = len(lines)
-
-    # Parse CSV safely (handles quoted commas and delimiter variants)
     try:
-        sample = "\n".join(lines[:20])
-        dialect = csv.Sniffer().sniff(sample, delimiters=",;\t|")
-        reader = csv.reader(io.StringIO(raw), dialect)
+        reader = csv.reader(io.StringIO(raw))
         rows = list(reader)
     except Exception:
-        # If parse fails, return compact line sample fallback.
-        kept_lines = lines if len(lines) <= 7 else [lines[0]] + lines[1:6] + [lines[-1]]
-        compressed = "\n".join(kept_lines).strip()
         return {
             "detected_type": "csv",
-            "compressed": compressed,
-            "stats": {"lines_in": lines_in, "lines_out": len(kept_lines), "chars_in": chars_in, "chars_out": len(compressed)},
+            "compressed": raw,
+            "stats": {"chars_in": chars_in, "chars_out": chars_in},
+            "note": "Not compressed (parse failed)"
         }
 
-    rows = [r for r in rows if any((c or "").strip() for c in r)]
     if len(rows) < 2:
         return {
             "detected_type": "csv",
             "compressed": raw,
-            "stats": {"lines_in": lines_in, "lines_out": lines_in, "chars_in": chars_in, "chars_out": chars_in},
+            "stats": {"chars_in": chars_in, "chars_out": chars_in},
+            "note": "Not compressed (too few rows)"
         }
 
     header = rows[0]
-    data_rows = rows[1:]
-
-    row_count = len(data_rows)
+    data = rows[1:]
+    row_count = len(data)
     col_count = len(header)
 
-    # Take first N and last N rows as samples
-    samples: List[List[str]] = []
-    samples.extend(data_rows[:sample_rows])
+    first_idx = list(range(min(sample_rows, row_count)))
+    last_idx = []
+    if row_count > sample_rows:
+        last_idx = list(range(max(sample_rows, row_count - sample_rows), row_count))
+    idx = sorted(set(first_idx + last_idx))
+    samples: List[List[str]] = [data[i] for i in idx]
 
-    if row_count > sample_rows * 2:
-        samples.append(["…"] * col_count)
+    out: List[str] = []
+    out.append("CSV COMPRESSED SUMMARY")
+    out.append(f"columns ({col_count}): " + ", ".join(header))
+    out.append(f"row_count: {row_count}")
+    out.append("sample_rows:")
+    for r in samples:
+        out.append("- " + ", ".join(r))
+    if row_count > (sample_rows * 2):
+        out.append("- ... (middle rows omitted)")
 
-    samples.extend(data_rows[-sample_rows:])
-
-    # Build compact CSV-like output to keep tokens low.
-    kept_rows: List[List[str]] = [header] + samples
-    out_io = io.StringIO()
-    writer = csv.writer(out_io, dialect=dialect)
-    writer.writerows(kept_rows)
-    compressed = out_io.getvalue().strip()
-    chars_out = len(compressed)
+    compressed = "\n".join(out)
 
     return {
         "detected_type": "csv",
         "compressed": compressed,
         "stats": {
-            "lines_in": lines_in,
-            "lines_out": len(kept_rows),
             "chars_in": chars_in,
-            "chars_out": chars_out,
+            "chars_out": len(compressed),
             "row_count": row_count,
             "column_count": col_count,
         },

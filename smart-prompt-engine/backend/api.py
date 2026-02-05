@@ -129,6 +129,19 @@ def llm_score_from_missing(prompt: str, missing_info: list) -> int:
     return int(score)
 
 
+def _ensure_savings(result: dict, original: str) -> dict:
+    comp = (result.get("compressed") or "").strip()
+    if not comp:
+        return result
+    if len(comp) >= len(original):
+        result["compressed"] = original
+        stats = result.setdefault("stats", {})
+        stats["chars_in"] = len(original)
+        stats["chars_out"] = len(original)
+        result["note"] = "Not compressed (would increase size)"
+    return result
+
+
 @app.get("/")
 def root():
     return {"message": "Smart Prompt Engine API running"}
@@ -254,24 +267,24 @@ def compress_endpoint(data: CompressData):
     if is_log:
         out = compress_logs(text)
         out["debug"] = {"matched": "logs", **debug}
-        return out
+        return _ensure_savings(out, text)
     if is_json:
         out = compress_json(text)
         out["debug"] = {"matched": "json", **debug}
-        return out
+        return _ensure_savings(out, text)
     if is_code:
         out = compress_code(text)
         out["debug"] = {"matched": "code", **debug}
-        return out
+        return _ensure_savings(out, text)
     if is_csv:
         out = compress_csv(text)
         out["debug"] = {"matched": "csv", **debug}
-        return out
+        return _ensure_savings(out, text)
 
     # ✅ NEW: default to text compression
     out = compress_text(text)
     out["debug"] = {"matched": "text", **debug}
-    return out
+    return _ensure_savings(out, text)
 
 
 @app.post("/feedback")
