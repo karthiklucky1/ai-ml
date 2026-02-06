@@ -180,6 +180,14 @@ function repositionWidget(widgetEl, promptEl) {
         const newBottom = window.innerHeight - p.top + extraGap;
         widgetEl.style.bottom = `${Math.min(newBottom, window.innerHeight - 80)}px`;
     }
+    clampWidgetToViewport(widgetEl);
+}
+
+function scheduleReposition() {
+    requestAnimationFrame(() => {
+        repositionWidget(widget, activePromptEl);
+        clampWidgetToViewport(widget);
+    });
 }
 
 function syncMiniView(widgetEl) {
@@ -541,12 +549,14 @@ async function updateForText(text) {
         lastSentText = "";
         lastInputAt = 0;
         setupTokenSaverUI("");
+        scheduleReposition();
         return;
     }
 
     lastSentText = trimmed;
 
     setupTokenSaverUI(trimmed);
+    scheduleReposition();
 
     let localScore = null;
 
@@ -566,6 +576,7 @@ async function updateForText(text) {
         scoreEl.textContent = `Score: ${score} | Intent: ${intent}`;
         syncMiniView(widget);
         statusEl.textContent = "";
+        scheduleReposition();
 
         const scoreNum = typeof s.score === "number" ? s.score : 0;
         if (scoreNum >= 75) {
@@ -587,6 +598,7 @@ async function updateForText(text) {
         scoreEl.textContent = "Score: -- | Intent: --";
         missEl.textContent = "Missing: --";
         statusEl.textContent = "Score failed";
+        scheduleReposition();
     }
 
     if (rewriteLocked) {
@@ -608,6 +620,7 @@ async function updateForText(text) {
         useBtn.disabled = true;
         lastRewrite = null;
         setupTokenSaverUI(trimmed);
+        scheduleReposition();
         return;
     }
 
@@ -645,6 +658,7 @@ async function updateForText(text) {
             useBtn.disabled = true;
             lastRewrite = null;
             setupTokenSaverUI(trimmed);
+            scheduleReposition();
             return;
         }
 
@@ -678,6 +692,7 @@ async function updateForText(text) {
 
         statusEl.textContent = "";
         useBtn.disabled = false;
+        scheduleReposition();
     } catch (e) {
         if (callId !== lastCallId) return;
         console.error("[SPE] /rewrite_suggestions failed:", e);
@@ -685,9 +700,11 @@ async function updateForText(text) {
         missEl.textContent = localMissingText;
         useBtn.disabled = true;
         lastRewrite = null;
+        scheduleReposition();
     }
 
     setupTokenSaverUI(trimmed);
+    scheduleReposition();
 }
 
 function bindPromptBox(box) {
