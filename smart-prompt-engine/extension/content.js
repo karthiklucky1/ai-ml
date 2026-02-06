@@ -85,7 +85,7 @@ function findPromptBox() {
 function getPromptText(box) {
     if (!box) return "";
     if (box.type === "textarea") return box.el.value || "";
-    return box.el.textContent || "";
+    return box.el.innerText || box.el.textContent || "";
 }
 
 function setPromptText(box, text) {
@@ -815,5 +815,6 @@ document.addEventListener("visibilitychange", () => {
     if (document.visibilityState !== "visible") return;
     const box = findPromptBox();
     if (!box) return;
+    bindPromptBox(box);
     updateForText(getPromptText(box));
 });
