@@ -17,10 +17,11 @@ from backend.scorer.gap_reasoner import GapReasoner
 from backend.scorer.local_score import LocalScorer
 from backend.llm.openai_client import OpenAITextClient, LLMError
 from backend.rewrite.suggestions import get_rewrite_suggestions, SYSTEM_VERSION as REWRITE_SYSTEM_VERSION
-from backend.compress.logs import compress_logs, looks_like_log, detect_log_reason
-from backend.compress.code import compress_code, looks_like_code, detect_code_reason
-from backend.compress.data import compress_json, looks_like_json, detect_json_reason
-from backend.compress.csv import compress_csv, looks_like_csv, detect_csv_reason
+from backend.compress.logs import compress_logs
+from backend.compress.code import compress_code
+from backend.compress.data import compress_json
+from backend.compress.csv import compress_csv
+from backend.compress.detect import detect_type
 from backend.storage.feedback import append_feedback, summary as feedback_summary
 from backend.compress.text import compress_text
 
@@ -246,43 +247,21 @@ def compress_endpoint(data: CompressData):
     if not text:
         return {"detected_type": "empty", "compressed": "", "stats": {"chars_in": 0, "chars_out": 0}}
 
-    # Debug logging intentionally disabled for production.
+    det = detect_type(text)
+    kind = det.get("type", "text")
 
-    is_log, why_log = detect_log_reason(text)
-    is_json, why_json = detect_json_reason(text)
-    is_code, why_code = detect_code_reason(text)
-    is_csv, why_csv = detect_csv_reason(text)
-
-    # Keep explicit debug parity with the detector booleans.
-    # Debug logging intentionally disabled for production.
-
-    debug = {
-        "logs": {"match": is_log, "why": why_log},
-        "json": {"match": is_json, "why": why_json},
-        "code": {"match": is_code, "why": why_code},
-        "csv": {"match": is_csv, "why": why_csv},
-    }
-
-    if is_log:
+    if kind == "logs":
         out = compress_logs(text)
-        out["debug"] = {"matched": "logs", **debug}
-        return _ensure_savings(out, text)
-    if is_json:
+    elif kind == "json":
         out = compress_json(text)
-        out["debug"] = {"matched": "json", **debug}
-        return _ensure_savings(out, text)
-    if is_code:
-        out = compress_code(text)
-        out["debug"] = {"matched": "code", **debug}
-        return _ensure_savings(out, text)
-    if is_csv:
+    elif kind == "csv":
         out = compress_csv(text)
-        out["debug"] = {"matched": "csv", **debug}
-        return _ensure_savings(out, text)
+    elif kind == "code":
+        out = compress_code(text)
+    else:
+        out = compress_text(text)
 
-    # ✅ NEW: default to text compression
-    out = compress_text(text)
-    out["debug"] = {"matched": "text", **debug}
+    out["debug"] = det.get("debug", {"matched": kind})
     return _ensure_savings(out, text)
 
 
