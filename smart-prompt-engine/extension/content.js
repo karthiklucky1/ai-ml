@@ -445,10 +445,10 @@ let widget = createWidget();
 let debounceTimer = null;
 let lastRewrite = null;
 
-const SCORE_DEBOUNCE_MS = 1200;
+const SCORE_DEBOUNCE_MS = 700;
 const LLM_MIN_LEN = 12;
 const LLM_SCORE_THRESHOLD = 75;
-const REWRITE_THROTTLE_MS = 2500;
+const REWRITE_THROTTLE_MS = 1200;
 const REWRITE_IDLE_BYPASS_MS = 800;
 
 let lastSentText = "";
@@ -461,6 +461,8 @@ let lastRewriteAt = 0;
 let lastRewritePrompt = "";
 let rewriteDraftMode = false;
 let optimizedScore = null;
+let goodScoreStreak = 0;
+let goodScorePromptKey = "";
 
 const scoreCache = new Map();
 const llmCache = new Map();
@@ -698,8 +700,21 @@ async function updateForText(text) {
 
         const scoreNum = typeof s.score === "number" ? s.score : 0;
         if (scoreNum >= 75) {
-            missEl.textContent = "Missing: none ✅";
+            if (goodScorePromptKey === scoringPrompt) {
+                goodScoreStreak += 1;
+            } else {
+                goodScorePromptKey = scoringPrompt;
+                goodScoreStreak = 1;
+            }
+
+            if (goodScoreStreak >= 2) {
+                missEl.textContent = "Missing: none ✅";
+            } else {
+                missEl.textContent = "Missing: verifying completeness...";
+            }
         } else {
+            goodScoreStreak = 0;
+            goodScorePromptKey = "";
             const dims = Array.isArray(s.missing_dimensions) ? s.missing_dimensions : [];
             const sug = Array.isArray(s.live_suggestions) ? s.live_suggestions : [];
             if (sug.length) {
