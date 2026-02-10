@@ -463,6 +463,7 @@ let rewriteDraftMode = false;
 let optimizedScore = null;
 let goodScoreStreak = 0;
 let goodScorePromptKey = "";
+let rewriteSessionActive = false;
 
 const scoreCache = new Map();
 const llmCache = new Map();
@@ -654,6 +655,7 @@ async function updateForText(text) {
         lastRewrite = null;
         rewriteLocked = false;
         lockedText = "";
+        rewriteSessionActive = false;
         lastSentText = "";
         lastInputAt = 0;
         setupTokenSaverUI("");
@@ -666,19 +668,75 @@ async function updateForText(text) {
     setupTokenSaverUI(trimmed);
     scheduleReposition();
 
-    if (rewriteDraftMode && hasUnfilledRequiredBlanks(trimmed)) {
-        statusEl.textContent = "Analyzing draft... updates paused until required fields are filled.";
+    if (rewriteSessionActive) {
         useBtn.disabled = true;
         if (typeof optimizedScore === "number") setOptimizedScore(optimizedScoreEl, optimizedScore);
-        setupTokenSaverUI(trimmed);
-        scheduleReposition();
-        return;
-    }
-    if (rewriteDraftMode && !hasUnfilledRequiredBlanks(trimmed)) {
-        rewriteDraftMode = false;
-    }
 
-    if (rewriteLocked) {
+        if (hasUnfilledRequiredBlanks(trimmed)) {
+            statusEl.textContent = "Rewrite mode: fill required fields. Live analysis is paused.";
+            setupTokenSaverUI(trimmed);
+            scheduleReposition();
+            return;
+        }
+
+        statusEl.textContent = "Rewrite mode: checking missing fields...";
+        try {
+            let r = llmCache.get(trimmed);
+            if (!r) {
+                r = await postJSON("/rewrite_suggestions", { prompt: trimmed });
+                llmCache.set(trimmed, r);
+            }
+            if (callId !== lastCallId) return;
+
+            if (r.error) {
+                statusEl.textContent = "LLM unavailable";
+                scheduleReposition();
+                return;
+            }
+
+            lastRewrite = r;
+            const req = Array.isArray(r.required_missing) ? r.required_missing : [];
+            const opt = Array.isArray(r.optional_missing) ? r.optional_missing : [];
+
+            const reqFields = req
+                .map((x) => (typeof x === "string" ? x : x?.field))
+                .filter(Boolean)
+                .slice(0, 5);
+
+            const optFields = opt
+                .map((x) => (typeof x === "string" ? x : x?.field))
+                .filter(Boolean)
+                .slice(0, 3);
+
+            missEl.textContent =
+                `Missing (required): ${reqFields.length ? reqFields.join(", ") : "none ✅"} | ` +
+                `Optional: ${optFields.length ? optFields.join(", ") : "none"}`;
+
+            if (typeof r.score === "number" && r.score > 0) {
+                optimizedScore = r.score;
+                setOptimizedScore(optimizedScoreEl, optimizedScore);
+            }
+
+            if (reqFields.length > 0) {
+                statusEl.textContent = "Rewrite mode: required fields still missing. Live analysis is paused.";
+                scheduleReposition();
+                return;
+            }
+
+            rewriteSessionActive = false;
+            rewriteDraftMode = false;
+            rewriteLocked = false;
+            lockedText = "";
+            statusEl.textContent = "Required fields complete. Updating live analysis...";
+            scheduleReposition();
+        } catch (e) {
+            if (callId !== lastCallId) return;
+            console.error("[SPE] rewrite session check failed:", e);
+            statusEl.textContent = "Rewrite check failed";
+            scheduleReposition();
+            return;
+        }
+    } else if (rewriteLocked) {
         const now = normalizeText(trimmed);
         if (!isMeaningfulChange(lockedText, now)) {
             statusEl.textContent = "Rewrite applied. Live analysis paused.";
@@ -918,6 +976,7 @@ async function bindTextareaLoop() {
         optimizedScore = typeof lastRewrite.score === "number" ? lastRewrite.score : optimizedScore;
         setOptimizedScore(widget.querySelector("#spe-optimized-score"), optimizedScore);
         rewriteDraftMode = hasUnfilledRequiredBlanks(chosen);
+        rewriteSessionActive = true;
         rewriteLocked = true;
         lockedText = normalizeText(chosen);
         const statusEl = widget.querySelector("#spe-status");
