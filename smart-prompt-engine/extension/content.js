@@ -192,9 +192,108 @@ function scheduleReposition() {
 
 function syncMiniView(widgetEl) {
     if (!widgetEl) return;
-    const scoreText = widgetEl.querySelector("#spe-score")?.textContent || "Score: -- | Intent: --";
+    const scoreText =
+        widgetEl.querySelector("#spe-score")?.textContent ||
+        "Live Analysis (Draft Score): -- | Intent: --";
     const miniText = widgetEl.querySelector("#spe-mini-line");
     if (miniText) miniText.textContent = scoreText;
+}
+
+function setDraftScore(scoreEl, score, intent) {
+    if (!scoreEl) return;
+    const scoreText = typeof score === "number" ? score : "--";
+    const intentText = intent || "--";
+    scoreEl.textContent = `Live Analysis (Draft Score): ${scoreText} | Intent: ${intentText}`;
+}
+
+function setOptimizedScore(optEl, score) {
+    if (!optEl) return;
+    if (typeof score === "number" && score >= 0) {
+        optEl.textContent = `Optimized Score: ${score}`;
+        optEl.style.display = "block";
+        return;
+    }
+    optEl.textContent = "Optimized Score: --";
+    optEl.style.display = "none";
+}
+
+function hasUnfilledRequiredBlanks(text) {
+    const raw = text || "";
+    const lower = raw.toLowerCase();
+    const reqLabel = "fill these (required):";
+    const optLabel = "fill these (optional):";
+    const reqIdx = lower.indexOf(reqLabel);
+    if (reqIdx === -1) return false;
+
+    const sectionStart = reqIdx + reqLabel.length;
+    const optIdx = lower.indexOf(optLabel, sectionStart);
+    const section = (optIdx === -1 ? raw.slice(sectionStart) : raw.slice(sectionStart, optIdx)).trim();
+    if (!section) return false;
+    if (section.toLowerCase().includes("none")) return false;
+    return section.includes("____");
+}
+
+function buildScoringPrompt(text) {
+    const raw = text || "";
+    const lines = raw.split("\n");
+    const core = [];
+    const filledDetails = [];
+    let fillMode = null;
+
+    const parseFieldValue = (line) => {
+        const m = line.match(/^\s*-\s*([^:]+):\s*(.+)\s*$/);
+        if (!m) return null;
+        const field = (m[1] || "").trim();
+        const value = (m[2] || "").trim();
+        if (!field || !value) return null;
+        if (/^none\b/i.test(field) || /^none\b/i.test(value)) return null;
+        if (value.includes("____")) return null;
+        return `${field}: ${value}`;
+    };
+
+    for (const ln of lines) {
+        const t = (ln || "").trim();
+        const low = t.toLowerCase();
+
+        if (low === "fill these (required):") {
+            fillMode = "required";
+            continue;
+        }
+        if (low === "fill these (optional):") {
+            fillMode = "optional";
+            continue;
+        }
+
+        if (fillMode && t.startsWith("-")) {
+            const fv = parseFieldValue(t);
+            if (fv) filledDetails.push(fv);
+            continue;
+        }
+
+        if (fillMode && !t) {
+            continue;
+        }
+
+        if (fillMode && t && !t.startsWith("-")) {
+            fillMode = null;
+        }
+
+        const looseFieldValue = parseFieldValue(t);
+        if (looseFieldValue) {
+            filledDetails.push(looseFieldValue);
+            continue;
+        }
+
+        core.push(ln);
+    }
+
+    const coreText = normalizeText(core.join("\n"));
+    const details = Array.from(new Set(filledDetails));
+    if (!details.length) return coreText;
+
+    const detailsText = normalizeText(details.map((x) => `- ${x}`).join("\n"));
+    if (!coreText) return `Provided details:\n${detailsText}`;
+    return `${coreText}\n\nProvided details:\n${detailsText}`;
 }
 
 function setCollapsedState(widgetEl, collapsed) {
@@ -296,7 +395,8 @@ function createWidget() {
       <span id="spe-mini-line">Score: -- | Intent: --</span>
     </div>
     <div id="spe-body">
-      <div id="spe-score" style="font-size:13px;margin-top:6px;">Score: -- | Intent: --</div>
+      <div id="spe-score" style="font-size:13px;margin-top:6px;">Live Analysis (Draft Score): -- | Intent: --</div>
+      <div id="spe-optimized-score" style="display:none;font-size:12px;color:#245fdd;margin-top:4px;">Optimized Score: --</div>
       <div id="spe-missing" style="font-size:12px;color:#555;margin-top:6px;">Missing: --</div>
       <div id="spe-status" style="font-size:12px;color:#777;margin-top:8px;"></div>
 
@@ -359,6 +459,8 @@ let lockedText = "";
 let lastInputAt = 0;
 let lastRewriteAt = 0;
 let lastRewritePrompt = "";
+let rewriteDraftMode = false;
+let optimizedScore = null;
 
 const scoreCache = new Map();
 const llmCache = new Map();
@@ -532,13 +634,17 @@ function setupTokenSaverUI(trimmed) {
 async function updateForText(text) {
     const callId = ++lastCallId;
     const trimmed = normalizeText(text);
+    const scoringPrompt = buildScoringPrompt(trimmed);
     const scoreEl = widget.querySelector("#spe-score");
+    const optimizedScoreEl = widget.querySelector("#spe-optimized-score");
     const missEl = widget.querySelector("#spe-missing");
     const statusEl = widget.querySelector("#spe-status");
     const useBtn = widget.querySelector("#spe-best");
 
     if (!trimmed) {
-        scoreEl.textContent = "Score: -- | Intent: --";
+        setDraftScore(scoreEl, null, null);
+        optimizedScore = null;
+        setOptimizedScore(optimizedScoreEl, null);
         syncMiniView(widget);
         missEl.textContent = "Missing: --";
         statusEl.textContent = "";
@@ -558,24 +664,36 @@ async function updateForText(text) {
     setupTokenSaverUI(trimmed);
     scheduleReposition();
 
+    if (rewriteDraftMode && hasUnfilledRequiredBlanks(trimmed)) {
+        statusEl.textContent = "Analyzing draft... updates paused until required fields are filled.";
+        useBtn.disabled = true;
+        if (typeof optimizedScore === "number") setOptimizedScore(optimizedScoreEl, optimizedScore);
+        setupTokenSaverUI(trimmed);
+        scheduleReposition();
+        return;
+    }
+    if (rewriteDraftMode && !hasUnfilledRequiredBlanks(trimmed)) {
+        rewriteDraftMode = false;
+    }
+
     let localScore = null;
 
     try {
-        statusEl.textContent = "Scoring...";
-        let s = scoreCache.get(trimmed);
+        statusEl.textContent = "Analyzing draft...";
+        let s = scoreCache.get(scoringPrompt);
         if (!s) {
-            s = await postJSON("/score", { prompt: trimmed });
-            scoreCache.set(trimmed, s);
+            s = await postJSON("/score", { prompt: scoringPrompt });
+            scoreCache.set(scoringPrompt, s);
         }
 
         if (callId !== lastCallId) return;
         localScore = s;
 
-        const score = typeof s.score === "number" ? s.score : "--";
+        const score = typeof s.score === "number" ? s.score : null;
         const intent = s.intent || "other";
-        scoreEl.textContent = `Score: ${score} | Intent: ${intent}`;
+        setDraftScore(scoreEl, score, intent);
         syncMiniView(widget);
-        statusEl.textContent = "";
+        statusEl.textContent = "Analysis updated.";
         scheduleReposition();
 
         const scoreNum = typeof s.score === "number" ? s.score : 0;
@@ -595,7 +713,7 @@ async function updateForText(text) {
     } catch (e) {
         if (callId !== lastCallId) return;
         console.error("[SPE] /score failed:", e);
-        scoreEl.textContent = "Score: -- | Intent: --";
+        setDraftScore(scoreEl, null, null);
         missEl.textContent = "Missing: --";
         statusEl.textContent = "Score failed";
         scheduleReposition();
@@ -682,12 +800,8 @@ async function updateForText(text) {
             `Optional: ${optFields.length ? optFields.join(", ") : "none"}`;
 
         if (typeof r.score === "number" && r.score > 0) {
-            const llmIntent = (r.intent && r.intent !== "other") ? r.intent : null;
-            const current = scoreEl.textContent || "";
-            const currentIntentMatch = current.match(/Intent:\s*([a-zA-Z_]+)/);
-            const currentIntent = currentIntentMatch ? currentIntentMatch[1] : "other";
-            scoreEl.textContent = `Score: ${r.score} | Intent: ${llmIntent || currentIntent}`;
-            syncMiniView(widget);
+            optimizedScore = r.score;
+            setOptimizedScore(optimizedScoreEl, optimizedScore);
         }
 
         statusEl.textContent = "";
@@ -725,7 +839,7 @@ function bindPromptBox(box) {
             if (clean === lastMeaningfulText) return;
             lastMeaningfulText = clean;
             updateForText(clean);
-        }, 250);
+        }, SCORE_DEBOUNCE_MS);
     };
     box.el.addEventListener("input", onChange);
     box.el.addEventListener("keyup", onChange);
@@ -782,6 +896,13 @@ async function bindTextareaLoop() {
 
         const chosen = cards[0];
         setPromptText(box, chosen);
+        optimizedScore = typeof lastRewrite.score === "number" ? lastRewrite.score : optimizedScore;
+        setOptimizedScore(widget.querySelector("#spe-optimized-score"), optimizedScore);
+        rewriteDraftMode = hasUnfilledRequiredBlanks(chosen);
+        const statusEl = widget.querySelector("#spe-status");
+        if (statusEl && rewriteDraftMode) {
+            statusEl.textContent = "Rewrite applied. Fill required fields. Analyzing draft is paused.";
+        }
 
         try {
             await postJSON("/feedback", {
