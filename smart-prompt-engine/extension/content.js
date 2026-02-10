@@ -678,6 +678,20 @@ async function updateForText(text) {
         rewriteDraftMode = false;
     }
 
+    if (rewriteLocked) {
+        const now = normalizeText(trimmed);
+        if (!isMeaningfulChange(lockedText, now)) {
+            statusEl.textContent = "Rewrite applied. Live analysis paused.";
+            useBtn.disabled = true;
+            if (typeof optimizedScore === "number") setOptimizedScore(optimizedScoreEl, optimizedScore);
+            setupTokenSaverUI(trimmed);
+            scheduleReposition();
+            return;
+        }
+        rewriteLocked = false;
+        lockedText = "";
+    }
+
     let localScore = null;
 
     try {
@@ -732,16 +746,6 @@ async function updateForText(text) {
         missEl.textContent = "Missing: --";
         statusEl.textContent = "Score failed";
         scheduleReposition();
-    }
-
-    if (rewriteLocked) {
-        const now = normalizeText(trimmed);
-        if (!isMeaningfulChange(lockedText, now)) {
-            setupTokenSaverUI(trimmed);
-            return;
-        }
-        rewriteLocked = false;
-        lockedText = "";
     }
 
     const localScoreNum = typeof localScore?.score === "number" ? localScore.score : 0;
@@ -914,9 +918,15 @@ async function bindTextareaLoop() {
         optimizedScore = typeof lastRewrite.score === "number" ? lastRewrite.score : optimizedScore;
         setOptimizedScore(widget.querySelector("#spe-optimized-score"), optimizedScore);
         rewriteDraftMode = hasUnfilledRequiredBlanks(chosen);
+        rewriteLocked = true;
+        lockedText = normalizeText(chosen);
         const statusEl = widget.querySelector("#spe-status");
-        if (statusEl && rewriteDraftMode) {
-            statusEl.textContent = "Rewrite applied. Fill required fields. Analyzing draft is paused.";
+        if (statusEl) {
+            if (rewriteDraftMode) {
+                statusEl.textContent = "Rewrite applied. Fill required fields. Analyzing draft is paused.";
+            } else {
+                statusEl.textContent = "Rewrite applied. Live analysis paused.";
+            }
         }
 
         try {
